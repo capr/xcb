@@ -17,7 +17,7 @@ function M.atom_map(c)
 		for i = 1, argc do
 			local s = select(i, ...)
 			if not atom_map[s] then
-				t[s] = C.xcb_intern_atom(c, 1, #s, s)
+				t[s] = C.xcb_intern_atom(c, 0, #s, s)
 			end
 		end
 		for s, cookie in pairs(t) do
