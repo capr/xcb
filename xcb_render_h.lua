@@ -4,7 +4,6 @@ local ffi = require'ffi'
 require'xcb_h'
 
 ffi.cdef[[
-// xcb/render.h
 enum {
 	XCB_RENDER_MAJOR_VERSION = 0,
 	XCB_RENDER_MINOR_VERSION = 11,

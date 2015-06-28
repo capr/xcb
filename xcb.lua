@@ -12,23 +12,26 @@ function M.atom_map(c)
 	local atom_map = {}
 	--register one or more atoms and return them as a hash {name = atom}
 	local function atoms(...)
-		local t = {}
+		local t
 		local argc = select('#', ...)
 		for i = 1, argc do
 			local s = select(i, ...)
 			if not atom_map[s] then
+				t = t or {}
 				t[s] = C.xcb_intern_atom(c, 0, #s, s)
 			end
 		end
-		for s, cookie in pairs(t) do
-			local reply = C.xcb_intern_atom_reply(c, cookie, nil)
-			atom_map[s] = reply.atom
+		if t then
+			for s, cookie in pairs(t) do
+				local reply = C.xcb_intern_atom_reply(c, cookie, nil)
+				atom_map[s] = reply.atom
+			end
 		end
 		return atom_map
 	end
 	--register a single atom and return it
 	local function atom(s)
-		return atoms(s)[s]
+		return atom_map[s] or atoms(s)[s]
 	end
 	return atoms, atom
 end
