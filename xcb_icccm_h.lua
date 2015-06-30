@@ -151,68 +151,68 @@ uint8_t xcb_icccm_get_wm_transient_for_reply(xcb_connection_t *c,
                                                xcb_generic_error_t **e);
 typedef enum {
 XCB_ICCCM_SIZE_HINT_US_POSITION = 1 << 0,
-  XCB_ICCCM_SIZE_HINT_US_SIZE = 1 << 1,
-  XCB_ICCCM_SIZE_HINT_P_POSITION = 1 << 2,
-  XCB_ICCCM_SIZE_HINT_P_SIZE = 1 << 3,
-  XCB_ICCCM_SIZE_HINT_P_MIN_SIZE = 1 << 4,
-  XCB_ICCCM_SIZE_HINT_P_MAX_SIZE = 1 << 5,
-  XCB_ICCCM_SIZE_HINT_P_RESIZE_INC = 1 << 6,
-  XCB_ICCCM_SIZE_HINT_P_ASPECT = 1 << 7,
-  XCB_ICCCM_SIZE_HINT_BASE_SIZE = 1 << 8,
-  XCB_ICCCM_SIZE_HINT_P_WIN_GRAVITY = 1 << 9
-  } xcb_icccm_size_hints_flags_t;
+	XCB_ICCCM_SIZE_HINT_US_SIZE = 1 << 1,
+	XCB_ICCCM_SIZE_HINT_P_POSITION = 1 << 2,
+	XCB_ICCCM_SIZE_HINT_P_SIZE = 1 << 3,
+	XCB_ICCCM_SIZE_HINT_P_MIN_SIZE = 1 << 4,
+	XCB_ICCCM_SIZE_HINT_P_MAX_SIZE = 1 << 5,
+	XCB_ICCCM_SIZE_HINT_P_RESIZE_INC = 1 << 6,
+	XCB_ICCCM_SIZE_HINT_P_ASPECT = 1 << 7,
+	XCB_ICCCM_SIZE_HINT_BASE_SIZE = 1 << 8,
+	XCB_ICCCM_SIZE_HINT_P_WIN_GRAVITY = 1 << 9
+} xcb_icccm_size_hints_flags_t;
 typedef struct {
-uint32_t flags;
-int32_t x, y;
-int32_t width, height;
-int32_t min_width, min_height;
-int32_t max_width, max_height;
-int32_t width_inc, height_inc;
-int32_t min_aspect_num, min_aspect_den;
-int32_t max_aspect_num, max_aspect_den;
-int32_t base_width, base_height;
-uint32_t win_gravity;
+	uint32_t flags;
+	int32_t x, y;
+	int32_t width, height;
+	int32_t min_width, min_height;
+	int32_t max_width, max_height;
+	int32_t width_inc, height_inc;
+	int32_t min_aspect_num, min_aspect_den;
+	int32_t max_aspect_num, max_aspect_den;
+	int32_t base_width, base_height;
+	uint32_t win_gravity;
 } xcb_size_hints_t;
 enum {
 	XCB_ICCCM_NUM_WM_SIZE_HINTS_ELEMENTS = 18,
 };
 void xcb_icccm_size_hints_set_position(xcb_size_hints_t *hints, int user_specified,
-                                         int32_t x, int32_t y);
+                                       int32_t x, int32_t y);
 void xcb_icccm_size_hints_set_size(xcb_size_hints_t *hints, int user_specified,
-                                     int32_t width, int32_t height);
+                                   int32_t width, int32_t height);
 void xcb_icccm_size_hints_set_min_size(xcb_size_hints_t *hints, int32_t min_width,
-                                         int32_t min_height);
+                                       int32_t min_height);
 void xcb_icccm_size_hints_set_max_size(xcb_size_hints_t *hints, int32_t max_width,
-                                         int32_t max_height);
+                                       int32_t max_height);
 void xcb_icccm_size_hints_set_resize_inc(xcb_size_hints_t *hints, int32_t width_inc,
-                                           int32_t height_inc);
+                                         int32_t height_inc);
 void xcb_icccm_size_hints_set_aspect(xcb_size_hints_t *hints, int32_t min_aspect_num,
-                                       int32_t min_aspect_den, int32_t max_aspect_num,
+                                     int32_t min_aspect_den, int32_t max_aspect_num,
                                      int32_t max_aspect_den);
 void xcb_icccm_size_hints_set_base_size(xcb_size_hints_t *hints, int32_t base_width,
-                                          int32_t base_height);
+                                        int32_t base_height);
 void xcb_icccm_size_hints_set_win_gravity(xcb_size_hints_t *hints,
-                                            xcb_gravity_t win_gravity);
+                                          xcb_gravity_t win_gravity);
 xcb_void_cookie_t xcb_icccm_set_wm_size_hints_checked(xcb_connection_t *c,
-                                                        xcb_window_t window,
+                                                      xcb_window_t window,
                                                       xcb_atom_t property,
                                                       xcb_size_hints_t *hints);
 xcb_void_cookie_t xcb_icccm_set_wm_size_hints(xcb_connection_t *c,
-                                                xcb_window_t window,
+                                              xcb_window_t window,
                                               xcb_atom_t property,
                                               xcb_size_hints_t *hints);
 xcb_get_property_cookie_t xcb_icccm_get_wm_size_hints(xcb_connection_t *c,
-                                                        xcb_window_t window,
+                                                      xcb_window_t window,
                                                       xcb_atom_t property);
 xcb_get_property_cookie_t xcb_icccm_get_wm_size_hints_unchecked(xcb_connection_t *c,
-                                                                  xcb_window_t window,
+                                                                xcb_window_t window,
                                                                 xcb_atom_t property);
 uint8_t xcb_icccm_get_wm_size_hints_reply(xcb_connection_t *c,
-                                            xcb_get_property_cookie_t cookie,
+                                          xcb_get_property_cookie_t cookie,
                                           xcb_size_hints_t *hints,
                                           xcb_generic_error_t **e);
 xcb_void_cookie_t xcb_icccm_set_wm_normal_hints_checked(xcb_connection_t *c,
-                                                          xcb_window_t window,
+                                                        xcb_window_t window,
                                                         xcb_size_hints_t *hints);
 xcb_void_cookie_t xcb_icccm_set_wm_normal_hints(xcb_connection_t *c,
                                                   xcb_window_t window,
@@ -225,11 +225,11 @@ uint8_t
 xcb_icccm_get_wm_size_hints_from_reply(xcb_size_hints_t *hints,
                                          xcb_get_property_reply_t *reply);
 uint8_t xcb_icccm_get_wm_normal_hints_reply(xcb_connection_t *c,
-                                              xcb_get_property_cookie_t cookie,
+                                            xcb_get_property_cookie_t cookie,
                                             xcb_size_hints_t *hints,
                                             xcb_generic_error_t **e);
 typedef struct {
-int32_t flags;
+  int32_t flags;
   uint32_t input;
   int32_t initial_state;
   xcb_pixmap_t icon_pixmap;
@@ -301,9 +301,9 @@ xcb_void_cookie_t xcb_icccm_set_wm_protocols(xcb_connection_t *c,
                                              uint32_t list_len,
                                              xcb_atom_t *list);
 typedef struct {
-  uint32_t atoms_len;
-  xcb_atom_t *atoms;
-  xcb_get_property_reply_t *_reply;
+	uint32_t atoms_len;
+	xcb_atom_t *atoms;
+	xcb_get_property_reply_t *_reply;
 } xcb_icccm_get_wm_protocols_reply_t;
 xcb_get_property_cookie_t xcb_icccm_get_wm_protocols(xcb_connection_t *c,
                                                      xcb_window_t window,
