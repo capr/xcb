@@ -20,8 +20,8 @@ void free (void*);
 
 function M.connect(displayname)
 
-	local type, select, assert, error, ffi, bit, glue =
-	      type, select, assert, error, ffi, bit, glue
+	local type, select, unpack, assert, error, ffi, bit, glue =
+	      type, select, unpack, assert, error, ffi, bit, glue
 	local cast = ffi.cast
 	local free = glue.free
 
@@ -247,6 +247,18 @@ function M.connect(displayname)
 		return C.xcb_generate_id(c)
 	end
 
+	function create_window(...)
+		return C.xcb_create_window(c, ...)
+	end
+
+	function destroy_window(...)
+		return C.xcb_destroy_window(c, ...)
+	end
+
+	function create_colormap(...)
+		return C.xcb_create_colormap(c, ...)
+	end
+
 	--window properties -------------------------------------------------------
 
 	function list_props(win)
@@ -395,6 +407,12 @@ function M.connect(displayname)
 
 	--window management -------------------------------------------------------
 
+	function get_geometry(win)
+		local cookie = C.xcb_get_geometry(c, win)
+		local reply = C.xcb_get_geometry_reply(c, cookie, nil)
+		return ffi.gc(reply, free)
+	end
+
 	net_supported_map = glue.memoize(function()
 		return get_atom_map_prop(screen.root, '_NET_SUPPORTED')
 	end)
@@ -448,6 +466,14 @@ function M.connect(displayname)
 			0, --timestamp
 			focused_win or C.XCB_NONE)
 		send_client_message_to_root(e)
+	end
+
+	function map(win)
+		C.xcb_map_window(c, win)
+	end
+
+	function unmap(win)
+		C.xcb_unmap_window(c, win)
 	end
 
 	--TODO: what's the diff. viz. the above?
