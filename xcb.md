@@ -15,7 +15,7 @@ Created mainly for [nw]'s [xcb backend], but directly usable for X11-only apps.
 
 ----------------------------------------------- -----------------------------------------------
 __connection__
-xcb_module.connect([displayname]) -> xcb        connect and get an API namespace
+xcb_module.connect([displayname]) -> xcb        connect and get a XCB API for that connection
 xcb.flush()                                     flush the command queue
 xcb.screen                                      default screen
 __server__
