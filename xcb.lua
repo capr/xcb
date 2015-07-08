@@ -535,21 +535,23 @@ function M.connect(displayname)
 	end
 
 	function set_title(win, title)
-		xcb.set_string_prop(win, C.XCB_ATOM_WM_NAME, title)
-		xcb.set_string_prop(win, C.XCB_ATOM_WM_ICON_NAME, title)
+		set_string_prop(win, C.XCB_ATOM_WM_NAME, title)
+		set_string_prop(win, C.XCB_ATOM_WM_ICON_NAME, title)
 	end
 
-	--xcb_mwmutil functions
+	--xcb_mwmutil_h functions
 
 	local function decode_motif_wm_hints(val, len)
 		return ffi.new('MotifWmHints', cast('MotifWmHints*', val)[0])
 	end
 	function get_motif_wm_hints(win)
-		get_prop(win, atom'_MOTIF_WM_HINTS', atom'_MOTIF_WM_HINTS', decode_motif_wm_hints, 5)
+		get_prop(win, atom'_MOTIF_WM_HINTS', atom'_MOTIF_WM_HINTS',
+			decode_motif_wm_hints, C.MOTIF_WM_HINTS_ELEMENTS)
 	end
 
 	function set_motif_wm_hints(win, hints)
-		set_prop(win, atom'_MOTIF_WM_HINTS', atom'_MOTIF_WM_HINTS', hints, 5)
+		set_prop(win, atom'_MOTIF_WM_HINTS', atom'_MOTIF_WM_HINTS', hints,
+			C.MOTIF_WM_HINTS_ELEMENTS)
 	end
 
 	function query_tree(win)
