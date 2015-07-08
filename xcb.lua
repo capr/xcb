@@ -5,6 +5,7 @@
 local ffi = require'ffi'
 local glue = require'glue'
 require'xcb_h'
+local err = require'xcb_err'
 local C = ffi.os == 'OSX' and ffi.load'/usr/X11/lib/libxcb.1.dylib' or ffi.load'xcb'
 local M = {C = C}
 
@@ -51,11 +52,11 @@ function M.connect(displayname)
 
 	--check a request cookie for errors (sync if needed)
 	function check(cookie)
-		local err = C.xcb_request_check(c, cookie)
-		if err == nil then return cookie end
-		local code = err.error_code
-		free(err)
-		error('XCB error: '..code)
+		local e = C.xcb_request_check(c, cookie)
+		if e == nil then return cookie end
+		local msg = err.format(e)
+		free(e)
+		error(msg, 2)
 	end
 
 	function flush()
@@ -114,9 +115,9 @@ function M.connect(displayname)
 		--check for errors
 		if e.response_type == 0 then
 			e = cast('xcb_generic_error_t*', e) --yap, just cast it
-			local code = e.error_code
+			local msg = err.format(e)
 			free(e)
-			error('XCB error: '..code)
+			error(msg)
 		end
 
 		ffi.gc(e, free)
