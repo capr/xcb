@@ -4,12 +4,24 @@
 
 local ffi = require'ffi'
 local glue = require'glue'
-require'xcb_h'
 local err = require'xcb_err'
+require'xcb_h'
+require'xcb_icccm_h'
+require'xcb_mwmutil_h'
 local C = ffi.os == 'OSX' and ffi.load'/usr/X11/lib/libxcb.1.dylib' or ffi.load'xcb'
 local M = {C = C}
 
 ffi.cdef'void free(void*);'
+
+local conn_errors = {
+	'socket error',
+	'extension not supported',
+	'out of memory',
+	'request too long',
+	'parse error',
+	'invalid screen',
+	'FD parsing failed',
+}
 
 function M.connect(displayname)
 
@@ -45,7 +57,11 @@ function M.connect(displayname)
 	local function init(displayname)
 		local screen_num = ffi.new'int[1]'
 		c = C.xcb_connect(displayname, screen_num)
-		assert(C.xcb_connection_has_error(c) == 0)
+		local err = C.xcb_connection_has_error(c)
+		if err ~= 0 then
+			error(('xcb_connect error: %d (%s)'):format(err,
+				conn_errors[err] or 'unknown'), 2)
+		end
 		api.c = c
 		return screen_num[0]
 	end
@@ -200,7 +216,7 @@ function M.connect(displayname)
 		return screen_iterator(C.xcb_get_setup(c))
 	end
 
-	function find_screen(screen_num)
+	local function find_screen(screen_num)
 		local i = 0
 		for screen in screens() do
 			if i == screen_num then
@@ -234,7 +250,7 @@ function M.connect(displayname)
 		end
 	end
 
-	--objects -----------------------------------------------------------------
+	--constructors and destructors --------------------------------------------
 
 	function gen_id()
 		return C.xcb_generate_id(c)
@@ -410,23 +426,19 @@ function M.connect(displayname)
 	net_supported_map = glue.memoize(function()
 		return get_atom_map_prop(screen.root, '_NET_SUPPORTED')
 	end)
-
 	function net_supported(s)
 		return net_supported_map()[atom(s)]
-	end
-
-	function set_netwm_state(win, set, atom1, atom2)
-		local e = atom_list_event(win, '_NET_WM_STATE', set and 1 or 0, atom1, atom2)
-		send_client_message_to_root(e)
 	end
 
 	function get_netwm_states(win)
 		return get_atom_map_prop(win, '_NET_WM_STATE')
 	end
-
-	function set_wm_hints(win, hints)
-		set_prop(win, C.XCB_ATOM_WM_HINTS, C.XCB_ATOM_WM_HINTS, hints,
-			C.XCB_ICCCM_NUM_WM_HINTS_ELEMENTS)
+	function set_netwm_states(win, t)
+		set_atom_map_prop(win, '_NET_WM_STATE', t)
+	end
+	function change_netwm_states(win, set, atom1, atom2)
+		local e = atom_list_event(win, '_NET_WM_STATE', set and 1 or 0, atom1, atom2)
+		send_client_message_to_root(e)
 	end
 
 	local function decode_wm_hints(val, len)
@@ -436,13 +448,56 @@ function M.connect(displayname)
 		return get_prop(win, C.XCB_ATOM_WM_HINTS, C.XCB_ATOM_WM_HINTS,
 			decode_wm_hints, C.XCB_ICCCM_NUM_WM_HINTS_ELEMENTS)
 	end
+	function set_wm_hints(win, hints)
+		set_prop(win, C.XCB_ATOM_WM_HINTS, C.XCB_ATOM_WM_HINTS, hints,
+			C.XCB_ICCCM_NUM_WM_HINTS_ELEMENTS)
+	end
+
+	local function decode_wm_size_hints(val, len)
+		return ffi.new('xcb_icccm_wm_size_hints_t', cast('xcb_icccm_wm_size_hints_t*', val)[0])
+	end
+	function get_wm_normal_hints(win)
+		return get_prop(win, C.XCB_ATOM_WM_NORMAL_HINTS, C.XCB_ATOM_WM_SIZE_HINTS,
+			decode_wm_size_hints, C.XCB_ICCCM_NUM_WM_SIZE_HINTS_ELEMENTS)
+	end
+	function set_wm_normal_hints(win, hints)
+		if hints.flags == 0 then return end
+		set_prop(win, C.XCB_ATOM_WM_NORMAL_HINTS, C.XCB_ATOM_WM_SIZE_HINTS,
+			hints, C.XCB_ICCCM_NUM_WM_SIZE_HINTS_ELEMENTS)
+	end
+	function set_minmax(win, minw, minh, maxw, maxh) --these are client rect sizes
+		local hints = ffi.new'xcb_size_hints_t'
+		hints.flags = 0
+		if minw or minh then
+			hints.flags = bit.bor(hints.flags, C.XCB_ICCCM_SIZE_HINT_P_MIN_SIZE)
+			hints.min_width = minw or 0
+			hints.min_height = minh or 0
+		end
+		if maxw or maxh then
+			hints.flags = bit.bor(hints.flags, C.XCB_ICCCM_SIZE_HINT_P_MAX_SIZE)
+			hints.max_width = maxw or 2^30 --just an arbitrarily large number
+			hints.max_height = maxh or 2^30
+		end
+		set_wm_normal_hints(win, hints)
+	end
+
+	local function decode_motif_wm_hints(val, len)
+		return ffi.new('xcb_motif_wm_hints_t', cast('xcb_motif_wm_hints_t*', val)[0])
+	end
+	function get_motif_wm_hints(win)
+		get_prop(win, atom'_MOTIF_WM_HINTS', atom'_MOTIF_WM_HINTS',
+			decode_motif_wm_hints, C.MOTIF_WM_HINTS_ELEMENTS)
+	end
+	function set_motif_wm_hints(win, hints)
+		set_prop(win, atom'_MOTIF_WM_HINTS', atom'_MOTIF_WM_HINTS', hints,
+			C.MOTIF_WM_HINTS_ELEMENTS)
+	end
 
 	--request filling up the frame_extents property before the window is mapped.
 	function request_frame_extents(win)
 		local e = client_message_event(win, atom'_NET_REQUEST_FRAME_EXTENTS')
 		send_client_message_to_root(e)
 	end
-
 	local function decode_extents(val)
 		val = cast('int32_t*', val)
 		return val[0], val[2], val[1], val[3] --left, top, right, bottom
@@ -454,20 +509,20 @@ function M.connect(displayname)
 		return get_prop(win, atom'_NET_FRAME_EXTENTS', C.XCB_ATOM_CARDINAL, decode_extents, 4)
 	end
 
-	function activate(win, focused_win)
-		local e = int32_list_event(win, '_NET_ACTIVE_WINDOW',
-			1, --message comes from an app
-			0, --timestamp
-			focused_win or C.XCB_NONE)
-		send_client_message_to_root(e)
-	end
-
 	function map(win)
 		C.xcb_map_window(c, win)
 	end
 
 	function unmap(win)
 		C.xcb_unmap_window(c, win)
+	end
+
+	function activate(win, focused_win)
+		local e = int32_list_event(win, '_NET_ACTIVE_WINDOW',
+			1, --message comes from an app
+			0, --timestamp
+			focused_win or C.XCB_NONE)
+		send_client_message_to_root(e)
 	end
 
 	--TODO: what's the diff. viz. the above?
@@ -481,33 +536,6 @@ function M.connect(displayname)
 		local e = client_message_event(win, 'WM_CHANGE_STATE')
 		e.data.data32[0] = C.XCB_ICCCM_WM_STATE_ICONIC
 		send_client_message_to_root(e)
-	end
-
-	local function decode_wm_size_hints(val, len)
-		return ffi.new('xcb_icccm_wm_size_hints_t', cast('xcb_icccm_wm_size_hints_t*', val)[0])
-	end
-	function get_wm_normal_hints(win)
-		return get_prop(win, C.XCB_ATOM_WM_NORMAL_HINTS, C.XCB_ATOM_WM_SIZE_HINTS,
-			decode_wm_size_hints, C.XCB_ICCCM_NUM_WM_SIZE_HINTS_ELEMENTS)
-	end
-
-	function set_wm_normal_hints(win, minw, minh, maxw, maxh)
-		local hints = ffi.new'xcb_size_hints_t'
-		hints.flags = 0
-		if minw or minh then
-			hints.flags = bit.bor(hints.flags, C.XCB_ICCCM_SIZE_HINT_P_MIN_SIZE)
-			hints.min_width = minw or 0
-			hints.min_height = minh or 0
-		end
-		if maxw or maxh then
-			hints.flags = bit.bor(hints.flags, C.XCB_ICCCM_SIZE_HINT_P_MAX_SIZE)
-			hints.max_width = maxw or 2^30 --just an arbitrarily large number
-			hints.max_height = maxh or 2^30
-		end
-		if hints.flags ~= 0 then
-			set_prop(win, C.XCB_ATOM_WM_NORMAL_HINTS, C.XCB_ATOM_WM_SIZE_HINTS,
-				hints, C.XCB_ICCCM_NUM_WM_SIZE_HINTS_ELEMENTS)
-		end
 	end
 
 	function translate_coords(src_win, dst_win, x, y)
@@ -534,25 +562,9 @@ function M.connect(displayname)
 	function get_title(win)
 		return xcb.get_string_prop(self.win, C.XCB_ATOM_WM_NAME)
 	end
-
 	function set_title(win, title)
 		set_string_prop(win, C.XCB_ATOM_WM_NAME, title)
 		set_string_prop(win, C.XCB_ATOM_WM_ICON_NAME, title)
-	end
-
-	--xcb_mwmutil_h functions
-
-	local function decode_motif_wm_hints(val, len)
-		return ffi.new('MotifWmHints', cast('MotifWmHints*', val)[0])
-	end
-	function get_motif_wm_hints(win)
-		get_prop(win, atom'_MOTIF_WM_HINTS', atom'_MOTIF_WM_HINTS',
-			decode_motif_wm_hints, C.MOTIF_WM_HINTS_ELEMENTS)
-	end
-
-	function set_motif_wm_hints(win, hints)
-		set_prop(win, atom'_MOTIF_WM_HINTS', atom'_MOTIF_WM_HINTS', hints,
-			C.MOTIF_WM_HINTS_ELEMENTS)
 	end
 
 	function query_tree(win)

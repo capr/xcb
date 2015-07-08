@@ -11,7 +11,7 @@ typedef struct {
 	unsigned long decorations;
 	long input_mode;
 	unsigned long status;
-} MotifWmHints;
+} xcb_motif_wm_hints_t;
 
 enum {
 	MOTIF_WM_HINTS_ELEMENTS = 5,

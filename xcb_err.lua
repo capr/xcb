@@ -1,8 +1,6 @@
 
 --X11 friendly error messages
 
-require'xcb_h'
-
 local err = {}
 
 err.error = {
@@ -180,6 +178,7 @@ err.minor = {
 	--TODO
 }
 
+--make an error message from a xcb_generic_error_t
 function err.format(e)
 	local err_name = err.error[e.error_code] or 'unknown'
 	local maj_name = err.major[e.major_code] or 'unknown'
