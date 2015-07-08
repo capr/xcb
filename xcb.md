@@ -3,7 +3,7 @@ tagline: XCB binding
 platforms: linux32, linux64
 ---
 
-## `local xcb = require'xcb'`
+## `local xcb_module = require'xcb'`
 
 Binding of [Xorg's XCB] library and higher-level cruft-hiding API.
 Created mainly for [nw]'s [xcb backend], but directly usable for X11-only apps.
@@ -15,7 +15,7 @@ Created mainly for [nw]'s [xcb backend], but directly usable for X11-only apps.
 
 ----------------------------------------------- -----------------------------------------------
 __connection__
-xcb.connect([displayname]) -> xcb               connect and get an API namespace
+xcb_module.connect([displayname]) -> xcb        connect and get an API namespace
 xcb.flush()                                     flush the command queue
 xcb.screen                                      default screen
 __server__
