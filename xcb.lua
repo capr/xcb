@@ -392,7 +392,8 @@ function M.connect(displayname)
 
 	function send_client_message_to_root(e)
 		local mask = bit.bor(
-			C.XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY,
+			C.XCB_EVENT_MASK_STRUCTURE_NOTIFY,
+			--C.XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY,
 			C.XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT)
 		send_client_message(screen.root, e, false, mask)
 	end
@@ -527,6 +528,15 @@ function M.connect(displayname)
 		local wh = ffi.new('int32_t[2]', cw, ch)
 		C.xcb_configure_window(c, win,
 			bit.bor(C.XCB_CONFIG_WINDOW_WIDTH, C.XCB_CONFIG_WINDOW_HEIGHT), wh)
+	end
+
+	function get_title(win)
+		return xcb.get_string_prop(self.win, C.XCB_ATOM_WM_NAME)
+	end
+
+	function set_title(win, title)
+		xcb.set_string_prop(win, C.XCB_ATOM_WM_NAME, title)
+		xcb.set_string_prop(win, C.XCB_ATOM_WM_ICON_NAME, title)
 	end
 
 	--xcb_mwmutil functions
