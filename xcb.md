@@ -5,9 +5,13 @@ platforms: linux32, linux64
 
 ## `local xcb = require'xcb'`
 
-XCB binding and higher-level cruft-hiding API. Check out [nw]'s
+XCB binding and higher-level cruft-hiding API.
+
+Check out [nw]'s
 [xcb backend](https://github.com/luapower/nw/blob/master/nw_xcb.lua)
 for more details on usage.
+
+## API
 
 ----------------------------------------------- -----------------------------------------------
 __connection__
