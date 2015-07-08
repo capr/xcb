@@ -6,7 +6,7 @@ platforms: linux32, linux64
 ## `local xcb = require'xcb'`
 
 Binding of [Xorg's XCB] library and higher-level cruft-hiding API.
-Check out [nw]'s [xcb backend] for more details on usage.
+Created mainly for [nw]'s [xcb backend], but directly usable for X11-only apps.
 
 [Xorg's XCB]:  http://xcb.freedesktop.org/
 [xcb backend]: https://github.com/luapower/nw/blob/master/nw_xcb.lua
