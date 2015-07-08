@@ -23,6 +23,22 @@ local conn_errors = {
 	'FD parsing failed',
 }
 
+--for setting _NET_WM_PID and WM_CLIENT_MACHINE.
+--NOTE: these are for Linux/GLIBC only!
+ffi.cdef[[
+int32_t getpid();
+int gethostname(char *name, size_t len);
+typedef struct {
+	char sysname[65];
+	char nodename[65];
+	char release[65];
+	char version[65];
+	char machine[65];
+	char __domainname[65];
+} xcb_utsname;
+int uname(xcb_utsname* buf);
+]]
+
 function M.connect(displayname)
 
 	local type, select, unpack, assert, error, ffi, bit, glue =
@@ -415,14 +431,6 @@ function M.connect(displayname)
 		send_client_message(screen.root, e, false, mask)
 	end
 
-	--respond to a _NET_WM_PING event
-	function pong(e)
-		local reply = ffi.new('xcb_client_message_event_t', e[0])
-		reply.response_type = C.XCB_CLIENT_MESSAGE
-		reply.window = screen.root
-		send_client_message_to_root(reply) --pong!
-	end
-
 	--window management -------------------------------------------------------
 
 	function get_geometry(win)
@@ -591,6 +599,34 @@ function M.connect(displayname)
 		}
 		free(reply)
 		return t
+	end
+
+	--_NET_WM_PING protocol helpers -------------------------------------------
+
+	--respond to a _NET_WM_PING event
+	function pong(e)
+		local reply = ffi.new('xcb_client_message_event_t', e[0])
+		reply.response_type = C.XCB_CLIENT_MESSAGE
+		reply.window = screen.root
+		send_client_message_to_root(reply) --pong!
+	end
+
+	--set _NET_WM_PID and WM_CLIENT_MACHINE as needed by the protocol
+	function set_netwm_ping_info(win)
+		set_cardinal_prop(win, '_NET_WM_PID', ffi.C.getpid())
+		local name
+		local buf = ffi.new'char[256]'
+		if ffi.C.gethostname(buf, 256) == 0 then
+			name = ffi.string(buf)
+		else
+			local utsname = ffi.new'xcb_utsname'
+			if ffi.C.uname(utsname) == 0 then
+				name = ffi.string(utsname.nodename)
+			end
+		end
+		if name then
+			set_string_prop(win, 'WM_CLIENT_MACHINE', name)
+		end
 	end
 
 	--shm extension -----------------------------------------------------------

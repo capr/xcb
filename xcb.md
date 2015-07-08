@@ -24,7 +24,6 @@ xcb.extension(name) -> true|false               check if an extension is availab
 __events__
 xcb.poll([block]) -> event | nil                poll (or wait) for the next event
 xcb.peek() -> event | nil                       get the next event without pulling it
-xcb.pong(e)                                     respond to a _NET_WM_PING event
 __atoms__
 xcb.atom(name) -> atom                          intern an atom
 xcb.atom_name(atom) -> s | nil                  get an atom's name
@@ -80,6 +79,9 @@ xcb.set_title(win, title)                       set window title and icon name
 xcb.query_tree(win) -> win_tree                 get window root, parent and children
 __shm__
 xcb.shm() -> shm_C                              get C namespace of xcb-shm if server supports shm
+__ping protocol__
+xcb.pong(e)                                     respond to a _NET_WM_PING event
+set_netwm_ping_info(win)                        set _NET_WM_PID and WM_CLIENT_MACHINE
 __direct access__
 xcb.c                                           xcb_connection_t
 xcb.C                                           XCB C namespace
