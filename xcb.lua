@@ -415,6 +415,14 @@ function M.connect(displayname)
 		send_client_message(screen.root, e, false, mask)
 	end
 
+	--respond to a _NET_WM_PING event
+	function pong(e)
+		local reply = ffi.new('xcb_client_message_event_t', e[0])
+		reply.response_type = C.XCB_CLIENT_MESSAGE
+		reply.window = screen.root
+		send_client_message_to_root(reply) --pong!
+	end
+
 	--window management -------------------------------------------------------
 
 	function get_geometry(win)

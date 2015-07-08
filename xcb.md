@@ -24,6 +24,7 @@ xcb.extension(name) -> true|false               check if an extension is availab
 __events__
 xcb.poll([block]) -> event | nil                poll (or wait) for the next event
 xcb.peek() -> event | nil                       get the next event without pulling it
+xcb.pong(e)                                     respond to a _NET_WM_PING event
 __atoms__
 xcb.atom(name) -> atom                          intern an atom
 xcb.atom_name(atom) -> s | nil                  get an atom's name
