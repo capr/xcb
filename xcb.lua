@@ -8,15 +8,7 @@ require'xcb_h'
 local C = ffi.os == 'OSX' and ffi.load'/usr/X11/lib/libxcb.1.dylib' or ffi.load'xcb'
 local M = {C = C}
 
-ffi.cdef[[
-typedef struct {
-    uint32_t flags, functions, decorations;
-    int32_t input_mode;
-    uint32_t status;
-} motif_wm_hints_t;
-
-void free (void*);
-]]
+ffi.cdef'void free(void*);'
 
 function M.connect(displayname)
 
@@ -25,8 +17,8 @@ function M.connect(displayname)
 	local cast = ffi.cast
 	local free = glue.free
 
-	local conn = {}
-	setfenv(1, conn)
+	local api = {C = C}
+	setfenv(1, api)
 
 	--helpers -----------------------------------------------------------------
 
@@ -53,7 +45,7 @@ function M.connect(displayname)
 		local screen_num = ffi.new'int[1]'
 		c = C.xcb_connect(displayname, screen_num)
 		assert(C.xcb_connection_has_error(c) == 0)
-		conn.c = c
+		api.c = c
 		return screen_num[0]
 	end
 
@@ -219,7 +211,7 @@ function M.connect(displayname)
 
 	local function init_screen(screen_num)
 		screen = find_screen(screen_num)
-		conn.screen = screen
+		api.screen = screen
 	end
 
 	depths = iterator(
@@ -537,8 +529,10 @@ function M.connect(displayname)
 			bit.bor(C.XCB_CONFIG_WINDOW_WIDTH, C.XCB_CONFIG_WINDOW_HEIGHT), wh)
 	end
 
+	--xcb_mwmutil functions
+
 	local function decode_motif_wm_hints(val, len)
-		return ffi.new('motif_wm_hints_t', cast('motif_wm_hints_t*', val)[0])
+		return ffi.new('MotifWmHints', cast('MotifWmHints*', val)[0])
 	end
 	function get_motif_wm_hints(win)
 		get_prop(win, atom'_MOTIF_WM_HINTS', atom'_MOTIF_WM_HINTS', decode_motif_wm_hints, 5)
@@ -590,7 +584,7 @@ function M.connect(displayname)
 	local screen_num = init(displayname)
 	init_screen(screen_num)
 
-	return conn
+	return api
 end
 
 return M
