@@ -5,12 +5,13 @@
 local ffi = require'ffi'
 local glue = require'glue'
 local err = require'xcb_err'
+local xsettings = require'xcb_xsettings'
 require'xcb_h'
 require'xcb_icccm_h'
 require'xcb_mwmutil_h'
 local C = ffi.os == 'OSX' and ffi.load'/usr/X11/lib/libxcb.1.dylib' or ffi.load'xcb'
 local M = {C = C}
-
+local print = print
 ffi.cdef'void free(void*);'
 
 local conn_errors = {
@@ -24,9 +25,9 @@ local conn_errors = {
 }
 
 --for setting _NET_WM_PID and WM_CLIENT_MACHINE.
---NOTE: these are for Linux/GLIBC only!
+--NOTE: these are for Linux/GLIBC and OSX only!
 ffi.cdef[[
-int32_t getpid();
+int getpid();
 int gethostname(char *name, size_t len);
 typedef struct {
 	char sysname[65];
@@ -41,8 +42,8 @@ int uname(xcb_utsname* buf);
 
 function M.connect(displayname)
 
-	local type, select, unpack, assert, error, ffi, bit, glue =
-	      type, select, unpack, assert, error, ffi, bit, glue
+	local type, select, unpack, assert, error, ffi, bit, table, glue =
+	      type, select, unpack, assert, error, ffi, bit, table, glue
 	local cast = ffi.cast
 	local free = glue.free
 
@@ -69,17 +70,18 @@ function M.connect(displayname)
 	--connection --------------------------------------------------------------
 
 	local c --xcb connection
+	local screen_num --default screen number
 
 	local function init(displayname)
-		local screen_num = ffi.new'int[1]'
-		c = C.xcb_connect(displayname, screen_num)
+		local snbuf = ffi.new'int[1]'
+		c = C.xcb_connect(displayname, snbuf)
+		screen_num = snbuf[0]
 		local err = C.xcb_connection_has_error(c)
 		if err ~= 0 then
 			error(('xcb_connect error: %d (%s)'):format(err,
 				conn_errors[err] or 'unknown'), 2)
 		end
 		api.c = c
-		return screen_num[0]
 	end
 
 	--check a request cookie for errors (sync if needed)
@@ -242,7 +244,7 @@ function M.connect(displayname)
 		end
 	end
 
-	local function init_screen(screen_num)
+	local function init_screen()
 		screen = find_screen(screen_num)
 		api.screen = screen
 	end
@@ -275,13 +277,30 @@ function M.connect(displayname)
 	function create_window(...)
 		return C.xcb_create_window(c, ...)
 	end
-
 	function destroy_window(...)
 		return C.xcb_destroy_window(c, ...)
 	end
 
 	function create_colormap(...)
 		return C.xcb_create_colormap(c, ...)
+	end
+	function free_colormap(...)
+		return C.xcb_free_colormap(c, ...)
+	end
+
+	function open_font(fid, name, sz)
+		C.xcb_open_font(c, fid, sz or #name, name)
+	end
+	function close_font(...)
+		C.xcb_close_font(c, ...)
+	end
+
+	function create_glyph_cursor(...)
+		C.xcb_create_glyph_cursor(c, ...)
+	end
+
+	function free_cursor(...)
+		C.xcb_free_cursor(c, ...)
 	end
 
 	--window properties -------------------------------------------------------
@@ -309,7 +328,34 @@ function M.connect(displayname)
 	function set_prop(win, prop, type, val, sz)
 		local format = prop_formats[type] or 32
 		C.xcb_change_property(c, C.XCB_PROP_MODE_REPLACE, win,
-			atom(prop), type, format, sz, val)
+			atom(prop), atom(type), format, sz, val)
+	end
+
+	--get a property value that spans multiple requests as a string.
+	function get_long_prop(win, prop, type)
+		local offset = 0
+		local t = {}
+		repeat
+			local cookie = C.xcb_get_property(c, 0, win, atom(prop), atom(type), offset, 8192)
+			local reply = C.xcb_get_property_reply(c, cookie, nil)
+			if not reply then break end
+			if reply.type ~= atom(type) then
+				free(reply)
+				break
+			end
+			local val = C.xcb_get_property_value(reply)
+			if val == nil then
+				free(reply)
+				break
+			end
+			local len = C.xcb_get_property_value_length(reply)
+			local s = ffi.string(val, len)
+			t[#t+1] = s
+			local more = reply.bytes_after ~= 0
+			free(reply)
+			offset = offset + len / (reply.format / 8)
+		until not more
+		return table.concat(t)
 	end
 
 	local function pass(reply, ...)
@@ -317,18 +363,24 @@ function M.connect(displayname)
 		return ...
 	end
 	function get_prop(win, prop, type, decode, sz)
-		local format = prop_formats[type] or 32
-		local cookie = C.xcb_get_property(c, 0, win, atom(prop), type, 0, sz or 0)
+		local cookie = C.xcb_get_property(c, 0, win, atom(prop), atom(type), 0, sz or 0)
 		local reply = C.xcb_get_property_reply(c, cookie, nil)
 		if not reply then return end
-		if reply.format == format and reply.type == type then
-			local val = C.xcb_get_property_value(reply)
-			if val == nil then return end
-			local len = C.xcb_get_property_value_length(reply)
-			return pass(reply, decode(val, len))
-		else
+		if reply.type ~= atom(type) then --property not found
 			free(reply)
+			return
 		end
+		if reply.bytes_after ~= 0 then
+			free(reply)
+			error('property value truncated', 2)
+		end
+		local val = C.xcb_get_property_value(reply)
+		if val == nil then --when can this happen?
+			free(reply)
+			return
+		end
+		local len = C.xcb_get_property_value_length(reply)
+		return pass(reply, decode(val, len / (reply.format / 8)))
 	end
 
 	function set_string_prop(win, prop, val, sz)
@@ -376,6 +428,10 @@ function M.connect(displayname)
 	function get_window_prop(win, prop)
 		return get_prop(win, prop, C.XCB_ATOM_WINDOW, decode_window, 1)
 	end
+	function set_window_prop(win, prop, target_win)
+		local winbuf = ffi.new('xcb_window_t[1]', target_win)
+		set_prop(win, prop, C.XCB_ATOM_WINDOW, winbuf, 1)
+	end
 
 	local function decode_window_list(val, len)
 		val = cast('xcb_window_t*', val)
@@ -412,11 +468,11 @@ function M.connect(displayname)
 	end
 
 	function int32_list_event(win, type, ...)
-		return list_event(win, type, 'data32', glue.pass)
+		return list_event(win, type, 'data32', glue.pass, ...)
 	end
 
 	function atom_list_event(win, type, ...)
-		return list_event(win, type, 'data32', atom)
+		return list_event(win, type, 'data32', atom, ...)
 	end
 
 	function send_client_message(win, e, propagate, mask)
@@ -425,10 +481,43 @@ function M.connect(displayname)
 
 	function send_client_message_to_root(e)
 		local mask = bit.bor(
-			C.XCB_EVENT_MASK_STRUCTURE_NOTIFY,
-			--C.XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY,
+			--C.XCB_EVENT_MASK_STRUCTURE_NOTIFY,
+			C.XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY,
 			C.XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT)
 		send_client_message(screen.root, e, false, mask)
+	end
+
+	--window attributes -------------------------------------------------------
+
+	function get_attrs(win)
+		local cookie = C.xcb_get_window_attributes(c, win)
+		local reply = C.xcb_get_window_attributes_reply(c, cookie, nil)
+		return ffi.gc(reply, free)
+	end
+
+	--helper to compose the mask and values array for xcb_create_window(),
+	--xcb_change_window_attributes() and xcb_configure_window().
+	function mask_and_values(t)
+		local mask = 0
+		local i, n = 0, glue.count(t)
+		local values = ffi.new('uint32_t[?]', n)
+		for maskbit, value in glue.sortedpairs(t) do
+			assert(maskbit > mask) --values must be added in enum order!
+			mask = bit.bor(mask, maskbit)
+			values[i] = value
+			i = i + 1
+		end
+		return mask, values
+	end
+
+	function change_attrs(win, t)
+		local mask, values = mask_and_values(t)
+		C.xcb_change_window_attributes(c, win, mask, value)
+	end
+
+	function set_cursor(win, cid)
+		local buf = ffi.new('int32_t[1]', cid)
+		change_attrs(win, C.XCB_CW_CURSOR, buf)
 	end
 
 	--window management -------------------------------------------------------
@@ -477,7 +566,6 @@ function M.connect(displayname)
 			decode_wm_size_hints, C.XCB_ICCCM_NUM_WM_SIZE_HINTS_ELEMENTS)
 	end
 	function set_wm_normal_hints(win, hints)
-		if hints.flags == 0 then return end
 		set_prop(win, C.XCB_ATOM_WM_NORMAL_HINTS, C.XCB_ATOM_WM_SIZE_HINTS,
 			hints, C.XCB_ICCCM_NUM_WM_SIZE_HINTS_ELEMENTS)
 	end
@@ -501,12 +589,28 @@ function M.connect(displayname)
 		return ffi.new('xcb_motif_wm_hints_t', cast('xcb_motif_wm_hints_t*', val)[0])
 	end
 	function get_motif_wm_hints(win)
-		get_prop(win, atom'_MOTIF_WM_HINTS', atom'_MOTIF_WM_HINTS',
+		get_prop(win, '_MOTIF_WM_HINTS', '_MOTIF_WM_HINTS',
 			decode_motif_wm_hints, C.MOTIF_WM_HINTS_ELEMENTS)
 	end
 	function set_motif_wm_hints(win, hints)
-		set_prop(win, atom'_MOTIF_WM_HINTS', atom'_MOTIF_WM_HINTS', hints,
+		set_prop(win, '_MOTIF_WM_HINTS', '_MOTIF_WM_HINTS', hints,
 			C.MOTIF_WM_HINTS_ELEMENTS)
+	end
+
+	local function decode_wm_state(val, len)
+		assert(len >= 2)
+		val = ffi.cast('int32_t*', val)
+		return val[0], val[1] --XCB_ICCCM_WM_STATE_*, icon_window_id
+	end
+	function get_wm_state(win)
+		return get_prop(win, 'WM_STATE', 'WM_STATE', decode_wm_state, 2)
+	end
+
+	function get_transient_for(win)
+		return get_window_prop(win, C.XCB_ATOM_WM_TRANSIENT_FOR)
+	end
+	function set_transient_for(win, for_win)
+		set_window_prop(win, C.XCB_ATOM_WM_TRANSIENT_FOR, for_win)
 	end
 
 	--request filling up the frame_extents property before the window is mapped.
@@ -522,7 +626,7 @@ function M.connect(displayname)
 		if not net_supported'_NET_REQUEST_FRAME_EXTENTS' then
 			return 0, 0, 0, 0
 		end
-		return get_prop(win, atom'_NET_FRAME_EXTENTS', C.XCB_ATOM_CARDINAL, decode_extents, 4)
+		return get_prop(win, '_NET_FRAME_EXTENTS', C.XCB_ATOM_CARDINAL, decode_extents, 4)
 	end
 
 	function map(win)
@@ -533,7 +637,15 @@ function M.connect(displayname)
 		C.xcb_unmap_window(c, win)
 	end
 
-	function activate(win, focused_win)
+	function get_net_active_window()
+		return get_window_prop(screen.root, '_NET_ACTIVE_WINDOW')
+	end
+
+	function net_active_window_supported()
+		return net_supported'_NET_ACTIVE_WINDOW'
+	end
+
+	function set_net_active_window(win, focused_win)
 		local e = int32_list_event(win, '_NET_ACTIVE_WINDOW',
 			1, --message comes from an app
 			0, --timestamp
@@ -541,11 +653,17 @@ function M.connect(displayname)
 		send_client_message_to_root(e)
 	end
 
-	--TODO: what's the diff. viz. the above?
-	function activate(win)
-		C.xcb_set_input_focus_checked(c, C.XCB_INPUT_FOCUS_NONE,
-		self.win, C.XCB_CURRENT_TIME)
-		C.xcb_flush(c)
+	function get_input_focus(win)
+		local cookie = C.xcb_get_input_focus(c)
+		local reply = C.xcb_get_input_focus_reply(c, cookie, nil)
+		if reply == nil then return end
+		local win = reply.focus
+		free(reply)
+		return win
+	end
+
+	function set_input_focus(win)
+		C.xcb_set_input_focus_checked(c, C.XCB_INPUT_FOCUS_NONE, win, C.XCB_CURRENT_TIME)
 	end
 
 	function minimize(win)
@@ -563,16 +681,35 @@ function M.connect(displayname)
 		return x, y
 	end
 
-	function change_pos(win, x, y)
-		local xy = ffi.new('int32_t[2]', x, y)
-		C.xcb_configure_window(c, win,
-			bit.bor(C.XCB_CONFIG_WINDOW_X, C.XCB_CONFIG_WINDOW_Y), xy)
+	function config_window(win, t) --change origin, client size, border width.
+		local mask, values = mask_and_values(t)
+		C.xcb_configure_window(c, win, mask, values)
 	end
 
-	function change_size(win, cw, ch)
-		local wh = ffi.new('int32_t[2]', cw, ch)
-		C.xcb_configure_window(c, win,
-			bit.bor(C.XCB_CONFIG_WINDOW_WIDTH, C.XCB_CONFIG_WINDOW_HEIGHT), wh)
+	function change_zorder(win, mode, relto_win)
+		--not using config_window() because it doesn't work with reparenting WMs.
+		local e = client_message_event(win)
+		send_client_message_to_root(e)
+		local mask, values = mask_and_values{
+			[C.XCB_CONFIG_WINDOW_STACK_MODE] = mode,
+			[C.XCB_CONFIG_WINDOW_SIBLING] = relto_win,
+		}
+--[=[
+typedef struct {
+	int type;		/* ConfigureRequest */
+	unsigned long serial;	/* # of last request processed by server */
+	Bool send_event;	/* true if this came from a SendEvent request */
+	Display *display;	/* Display the event was read from */
+	Window parent;
+	Window window;
+	int x, y;
+	int width, height;
+	int border_width;
+	Window above;
+	int detail;		/* Above, Below, TopIf, BottomIf, Opposite */
+	unsigned long value_mask;
+} XConfigureRequestEvent;
+]=]
 	end
 
 	function get_title(win)
@@ -600,6 +737,40 @@ function M.connect(displayname)
 		free(reply)
 		return t
 	end
+
+	--selections --------------------------------------------------------------
+
+	function get_selection_owner(sel)
+		local cookie = C.xcb_get_selection_owner(c, atom(sel))
+		local reply = C.xcb_get_selection_owner_reply(c, cookie, nil)
+		local owner = reply ~= nil and reply.owner or nil
+		free(reply)
+		return owner
+	end
+
+	--xsettings extension -----------------------------------------------------
+
+	function get_xsettings_window(snum)
+		snum = snum or screen_num
+		return get_selection_owner('_XSETTINGS_S'..snum)
+	end
+
+	function xsettings_set_property_change_notify()
+		local win = xsettings_window()
+		if not win then return end
+		local buf = ffi.new('int32_t[1]', bit.bor(
+			C.XCB_EVENT_MASK_STRUCTURE_NOTIFY,
+			C.XCB_EVENT_MASK_PROPERTY_CHANGE))
+		change_attrs(win, C.XCB_CW_EVENT_MASK, buf)
+	end
+
+	function get_xsettings()
+		local win = get_xsettings_window()
+		if not win then return end
+		local s = get_long_prop(win, '_XSETTINGS_SETTINGS', '_XSETTINGS_SETTINGS', 8)
+		return xsettings.decode(ffi.cast('const char*', s), #s)
+	end
+
 
 	--_NET_WM_PING protocol helpers -------------------------------------------
 
@@ -650,8 +821,8 @@ function M.connect(displayname)
 
 	--init --------------------------------------------------------------------
 
-	local screen_num = init(displayname)
-	init_screen(screen_num)
+	init(displayname)
+	init_screen()
 
 	return api
 end

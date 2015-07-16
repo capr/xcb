@@ -39,14 +39,15 @@ xcb.create_colormap(...)                        xcb_create_colormap wrapper
 __window properties__
 xcb.list_props(win) -> {name1, ...}             list properties
 xcb.delete_prop(win, prop)                      delete a property
-xcb.get_string_prop(win, prop) -> s             get a string property
-xcb.set_string_prop(win, prop, s)               set a string property
-xcb.get_atom_map_prop(win, prop) -> t           get an atom map property
-xcb.set_atom_map_prop(win, prop, t)             set an atom map property
-xcb.set_atom_prop(win, prop, val)               set an atom property
-xcb.set_cardinal_prop(win, prop, n)             set an integer property
-xcb.get_window_prop(win, prop) -> win           get a window id property
-xcb.get_window_list_prop(win, prop) -> t        get a window list property
+xcb.get_string_prop(win, prop) -> s             get a string-type property
+xcb.set_string_prop(win, prop, s)               set a string-type property
+xcb.get_atom_map_prop(win, prop) -> t           get an atom map-type property
+xcb.set_atom_map_prop(win, prop, t)             set an atom map-type property
+xcb.set_atom_prop(win, prop, val)               set an atom-type property
+xcb.set_cardinal_prop(win, prop, n)             set an integer-type property
+xcb.get_window_prop(win, prop) -> win           get a window-type property
+xcb.set_window_prop(win, prop, target_win)      set a window-type property
+xcb.get_window_list_prop(win, prop) -> t        get a window list-type property
 __client message events__
 client_message_event(win, type, fmt) -> e       create a client message event
 int32_list_event(win, type, n1, ...) -> e       create an integer list event
