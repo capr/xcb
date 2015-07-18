@@ -9,7 +9,7 @@ local xsettings = require'xcb_xsettings'
 require'xcb_h'
 require'xcb_icccm_h'
 require'xcb_mwmutil_h'
-local C = ffi.os == 'OSX' and ffi.load'/usr/X11/lib/libxcb.1.dylib' or ffi.load'xcb'
+local C = ffi.load'xcb'
 local M = {C = C}
 local print = print
 ffi.cdef'void free(void*);'
@@ -42,8 +42,8 @@ int uname(xcb_utsname* buf);
 
 function M.connect(displayname)
 
-	local type, select, unpack, assert, error, ffi, bit, table, glue =
-	      type, select, unpack, assert, error, ffi, bit, table, glue
+	local type, select, unpack, assert, error, ffi, bit, table, ipairs, require, glue =
+	      type, select, unpack, assert, error, ffi, bit, table, ipairs, require, glue
 	local cast = ffi.cast
 	local free = glue.free
 
@@ -71,6 +71,7 @@ function M.connect(displayname)
 
 	local c --xcb connection
 	local screen_num --default screen number
+	local cleanup = {} --disconnect handlers
 
 	local function init(displayname)
 		local snbuf = ffi.new'int[1]'
@@ -95,6 +96,14 @@ function M.connect(displayname)
 
 	function flush()
 		C.xcb_flush(c)
+	end
+
+	function disconnect()
+		for i,handler in ipairs(cleanup) do
+			handler()
+		end
+		C.xcb_disconnect(c)
+		c = nil
 	end
 
 	--server ------------------------------------------------------------------
@@ -512,12 +521,7 @@ function M.connect(displayname)
 
 	function change_attrs(win, t)
 		local mask, values = mask_and_values(t)
-		C.xcb_change_window_attributes(c, win, mask, value)
-	end
-
-	function set_cursor(win, cid)
-		local buf = ffi.new('int32_t[1]', cid)
-		change_attrs(win, C.XCB_CW_CURSOR, buf)
+		C.xcb_change_window_attributes(c, win, mask, values)
 	end
 
 	--window management -------------------------------------------------------
@@ -538,10 +542,10 @@ function M.connect(displayname)
 	function get_netwm_states(win)
 		return get_atom_map_prop(win, '_NET_WM_STATE')
 	end
-	function set_netwm_states(win, t)
+	function set_netwm_states(win, t) --before the window is mapped, use this.
 		set_atom_map_prop(win, '_NET_WM_STATE', t)
 	end
-	function change_netwm_states(win, set, atom1, atom2)
+	function change_netwm_states(win, set, atom1, atom2) --after a window is mapped, use this.
 		local e = atom_list_event(win, '_NET_WM_STATE', set and 1 or 0, atom1, atom2)
 		send_client_message_to_root(e)
 	end
@@ -758,10 +762,10 @@ typedef struct {
 	function xsettings_set_property_change_notify()
 		local win = xsettings_window()
 		if not win then return end
-		local buf = ffi.new('int32_t[1]', bit.bor(
+		local mask = bit.bor(
 			C.XCB_EVENT_MASK_STRUCTURE_NOTIFY,
-			C.XCB_EVENT_MASK_PROPERTY_CHANGE))
-		change_attrs(win, C.XCB_CW_EVENT_MASK, buf)
+			C.XCB_EVENT_MASK_PROPERTY_CHANGE)
+		change_attrs(win, {[C.XCB_CW_EVENT_MASK] = mask})
 	end
 
 	function get_xsettings()
@@ -771,6 +775,34 @@ typedef struct {
 		return xsettings.decode(ffi.cast('const char*', s), #s)
 	end
 
+	--cursors -----------------------------------------------------------------
+
+	local xcursor
+	local ctx
+	function load_cursor(name)
+		if not ctx then
+			xcursor = require'xcb_cursor'
+			ctx = xcursor.context(c, screen)
+			table.insert(cleanup, function() ctx:free() end)
+		end
+		return ctx:load(name)
+	end
+
+	function set_cursor(win, cursor)
+		change_attrs(win, {[C.XCB_CW_CURSOR] = cursor})
+	end
+
+	local bcur
+	function blank_cursor()
+		if not bcur then
+			bcur = gen_id()
+			local pix = gen_id()
+			C.xcb_create_pixmap(c, 1, pix, screen.root, 1, 1)
+			C.xcb_create_cursor(c, bcur, pix, pix, 0, 0, 0, 0, 0, 0, 0, 0)
+			C.xcb_free_pixmap(c, pix)
+		end
+		return bcur
+	end
 
 	--_NET_WM_PING protocol helpers -------------------------------------------
 

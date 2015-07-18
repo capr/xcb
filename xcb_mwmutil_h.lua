@@ -5,12 +5,13 @@ local ffi = require'ffi'
 ffi.cdef[[
 
 // _MOTIF_WM_HINTS property
+// these are int32s, not longs like you find on the net!
 typedef struct {
-	unsigned long flags;
-	unsigned long functions;
-	unsigned long decorations;
-	long input_mode;
-	unsigned long status;
+	unsigned int flags;
+	unsigned int functions;
+	unsigned int decorations;
+	int input_mode;
+	unsigned int status;
 } xcb_motif_wm_hints_t;
 
 enum {
