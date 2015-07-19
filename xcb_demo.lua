@@ -21,14 +21,12 @@ xcb.create_window(C.XCB_COPY_FROM_PARENT, win, xcb.screen.root,
 	100, 100, 500, 300,
 	0, C.XCB_WINDOW_CLASS_INPUT_OUTPUT, xcb.screen.root_visual, mask, values)
 
---[[
-local win2 = xcb.gen_id
+local win2 = xcb.gen_id()
 xcb.create_window(C.XCB_COPY_FROM_PARENT, win2, xcb.screen.root,
 	100, 100, 300, 200,
 	0, C.XCB_WINDOW_CLASS_INPUT_OUTPUT, xcb.screen.root_visual, 0, nil)
 
 xcb.set_transient_for(win2, win)
-]]
 
 --[[
 local hints = ffi.new'xcb_motif_wm_hints_t'
@@ -53,6 +51,7 @@ xcb.set_motif_wm_hints(win, hints)
 ]]
 
 xcb.map(win)
+xcb.map(win2)
 
 local bc = xcb.blank_cursor()
 xcb.set_cursor(win, bc)
@@ -65,8 +64,9 @@ while true do
 	local e, etype = xcb.poll(true)
 	if not e then return end
 	print(etype)
-	xcb.change_netwm_states(win, true, '_NET_WM_STATE_FULLSCREEN')
-	xcb.flush()
+
+	--xcb.change_netwm_states(win, true, '_NET_WM_STATE_FULLSCREEN')
+	--xcb.flush()
 
 	--[[
 	local cname = cnames[((i - 1) % #cnames) + 1]; i = i + 1
