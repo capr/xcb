@@ -40,7 +40,7 @@ typedef struct {
 int uname(xcb_utsname* buf);
 ]]
 
-function M.connect(displayname)
+function M.connect(...)
 
 	local type, select, unpack, assert, error, ffi, bit, table, ipairs, require, glue =
 	      type, select, unpack, assert, error, ffi, bit, table, ipairs, require, glue
@@ -73,7 +73,7 @@ function M.connect(displayname)
 	local screen_num --default screen number
 	local cleanup = {} --disconnect handlers
 
-	local function init(displayname)
+	local function connect(displayname)
 		local snbuf = ffi.new'int[1]'
 		c = C.xcb_connect(displayname, snbuf)
 		screen_num = snbuf[0]
@@ -81,6 +81,15 @@ function M.connect(displayname)
 		if err ~= 0 then
 			error(('xcb_connect error: %d (%s)'):format(err,
 				conn_errors[err] or 'unknown'), 2)
+		end
+	end
+
+	local function init(arg)
+		if ffi.istype('xcb_connection_t*', arg) then
+			c = arg
+			screen_num = 0 --TODO: how to get the real screen?
+		else
+			connect(displayname)
 		end
 		api.c = c
 	end
@@ -853,7 +862,7 @@ typedef struct {
 
 	--init --------------------------------------------------------------------
 
-	init(displayname)
+	init(...)
 	init_screen()
 
 	return api

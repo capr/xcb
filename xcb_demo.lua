@@ -5,6 +5,9 @@ local ffi = require'ffi'
 require'xcb_mwmutil_h'
 require'xcb_icccm_h'
 
+local xlib_xcb = require'xlib_xcb'
+require'glx_h'
+
 xcb = xcb.connect()
 local C = xcb.C
 
