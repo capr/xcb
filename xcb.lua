@@ -12,7 +12,6 @@ require'xcb_mwmutil_h'
 local C = ffi.load'xcb'
 local M = {C = C}
 local print = print
-ffi.cdef'void free(void*);'
 
 local conn_errors = {
 	'socket error',
@@ -91,7 +90,7 @@ function M.connect(...)
 		else
 			connect(displayname)
 		end
-		api.c = c
+		api.connection = c
 	end
 
 	--check a request cookie for errors (sync if needed)
@@ -274,7 +273,8 @@ function M.connect(...)
 		C.xcb_depth_visuals_iterator, C.xcb_visualtype_next)
 
 	--check if a given screen has a bgra8 visual.
-	function find_bgra8_visual(screen)
+	function find_bgra8_visual(screen0)
+		local screen = screen0 or screen
 		for d in depths(screen) do
 			if d.depth == 32 then
 				for v in visuals(d) do
@@ -288,22 +288,60 @@ function M.connect(...)
 
 	--constructors and destructors --------------------------------------------
 
-	function gen_id()
+	local function gen_id()
 		return C.xcb_generate_id(c)
 	end
 
-	function create_window(...)
-		return C.xcb_create_window(c, ...)
+	local classes = {
+		copy         = C.XCB_WINDOW_CLASS_COPY_FROM_PARENT,
+		input_output = C.XCB_WINDOW_CLASS_INPUT_OUTPUT,
+		input_only   = C.XCB_WINDOW_CLASS_INPUT_ONLY,
+	}
+	function create_window(parent, x, y, w, h, bw, depth, visual, mask, attrs, class)
+		local win = gen_id()
+		local class = classes[class or 'input_output']
+		C.xcb_create_window(c, depth, win, parent, x, y, w, h, bw, class, visual, mask, attrs)
+		return win
 	end
-	function destroy_window(...)
-		return C.xcb_destroy_window(c, ...)
+	function destroy_window(win)
+		return C.xcb_destroy_window(c, win)
 	end
 
-	function create_colormap(...)
-		return C.xcb_create_colormap(c, ...)
+	function create_colormap(win, visual, alloc)
+		local cmap = gen_id()
+		local alloc = alloc and C.XCB_COLORMAP_ALLOC_ALL or C.XCB_COLORMAP_ALLOC_NONE
+		C.xcb_create_colormap(c, alloc, cmap, win, visual)
+		return cmap
 	end
-	function free_colormap(...)
-		return C.xcb_free_colormap(c, ...)
+	function free_colormap(cmap)
+		return C.xcb_free_colormap(c, cmap)
+	end
+
+	function create_pixmap(win, w, h, depth)
+		local pix = xcb.gen_id()
+		C.xcb_create_pixmap(c, depth, pix, win, w, h)
+		return pix
+	end
+	function free_pixmap(pix)
+		C.xcb_free_pixmap(c, pix)
+	end
+
+	function create_gc(win, mask, values)
+		local gc = xcb.gen_id()
+		C.xcb_create_gc(c, gc, win, mask or 0, values)
+		return gc
+	end
+	function free_gc(gc)
+		C.xcb_free_gc(c, gc)
+	end
+
+	function put_image(gc, data, size, w, h, depth, pix, dx, dy, left_pad)
+		C.xcb_put_image(c, C.XCB_IMAGE_FORMAT_Z_PIXMAP,
+			pix, gc, w, h, dx or 0, dy or 0, left_pad or 0, depth, size, data)
+	end
+
+	function copy_area(gc, src, sx, sy, w, h, dst, dx, dy)
+		C.xcb_copy_area(c, src, dst, gc, sx or 0, sy or 0, dx or 0, dy or 0, w, h)
 	end
 
 	function open_font(fid, name, sz)

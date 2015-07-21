@@ -10,84 +10,45 @@ require'glx_h'
 
 xcb = xcb.connect()
 local C = xcb.C
+local screen = xcb.screen
+
+local visual = xcb.find_bgra8_visual(screen)
+assert(visual)
+visual = screen.root_visual
 
 local win = xcb.gen_id()
 local mask, values = xcb.mask_and_values({
 	[C.XCB_CW_BACK_PIXMAP] = C.XCB_BACK_PIXMAP_PARENT_RELATIVE,
 	[C.XCB_CW_EVENT_MASK]  = bit.bor(
+		C.XCB_EVENT_MASK_EXPOSURE,
 		C.XCB_EVENT_MASK_ENTER_WINDOW,
 		--C.XCB_EVENT_MASK_LEAVE_WINDOW,
 		0
 	),
 })
-xcb.create_window(C.XCB_COPY_FROM_PARENT, win, xcb.screen.root,
+xcb.create_window(C.XCB_COPY_FROM_PARENT, win, screen.root,
 	100, 100, 500, 300,
-	0, C.XCB_WINDOW_CLASS_INPUT_OUTPUT, xcb.screen.root_visual, mask, values)
+	0, C.XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, mask, values)
 
 local win2 = xcb.gen_id()
-xcb.create_window(C.XCB_COPY_FROM_PARENT, win2, xcb.screen.root,
+xcb.create_window(C.XCB_COPY_FROM_PARENT, win2, screen.root,
 	100, 100, 300, 200,
-	0, C.XCB_WINDOW_CLASS_INPUT_OUTPUT, xcb.screen.root_visual, 0, nil)
+	0, C.XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, 0, nil)
 
 xcb.set_transient_for(win2, win)
 
---[[
-local hints = ffi.new'xcb_motif_wm_hints_t'
-hints.flags = bit.bor(
-	C.MWM_HINTS_FUNCTIONS,
-	C.MWM_HINTS_DECORATIONS,
-	0)
-hints.functions = bit.bor(
-	C.MWM_FUNC_RESIZE,
-	C.MWM_FUNC_MOVE,
-	C.MWM_FUNC_MINIMIZE,
-	C.MWM_FUNC_MAXIMIZE,
-	C.MWM_FUNC_CLOSE,
-	0)
-hints.decorations = bit.bor(
-	C.MWM_DECOR_BORDER,
-	C.MWM_DECOR_TITLE,
-	C.MWM_DECOR_MENU,
-	C.MWM_DECOR_RESIZEH,
-	0)
-xcb.set_motif_wm_hints(win, hints)
-]]
-
 xcb.map(win)
 xcb.map(win2)
-
-local bc = xcb.blank_cursor()
-xcb.set_cursor(win, bc)
 xcb.flush()
 
-local cnames = require'glue'.keys(require'xcb_cursor'.cursors, true)
+local glxwin = win
 
 local i = 1
 while true do
 	local e, etype = xcb.poll(true)
 	if not e then return end
-	print(etype)
-
-	--xcb.change_netwm_states(win, true, '_NET_WM_STATE_FULLSCREEN')
-	--xcb.flush()
-
-	--[[
-	local cname = cnames[((i - 1) % #cnames) + 1]; i = i + 1
-	print(cname)
-	local cursor = xcb.load_cursor(cname)
-	xcb.set_cursor(win, cursor)
-	xcb.flush()
-	]]
-
-	--time.sleep(1)
-	--pp('>>', xcb.get_wm_state(win))
-
-	--[[
-	local cid = xcb.gen_id()
-	local sc, mc = cid, cid
-	xcb.create_glyph_cursor(cid, fid, fid, sc, mc, 0, 0, 0, 0, 0, 0)
-	xcb.set_cursor(win, cid)
-	xcb.flush()
-	cid = cid + 1
-	]]
+	if etype == C.XCB_EXPOSE then
+		draw()
+		glx.glXSwapBuffers(display, glxwin)
+	end
 end
