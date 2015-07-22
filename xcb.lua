@@ -2,6 +2,9 @@
 --XCB binding.
 --Written by Cosmin Apreutesei. Public Domain.
 
+--NOTE: XCB doesn't work with GLX (which is why this project was abandoned)
+--but you won't find this info easily on the net. The XCB website is lying!
+
 local ffi = require'ffi'
 local glue = require'glue'
 local err = require'xcb_err'
@@ -215,17 +218,6 @@ function M.connect(...)
 		return s
 	end, atom_revmap)
 
-	--make an atom list to be used as set_prop() value.
-	function atom_list(...)
-		local n = select('#', ...)
-		local atoms = ffi.new('xcb_atom_t[?]', n)
-		for i = 1,n do
-			local v = select(i,...)
-			atoms[i-1] = atom(v)
-		end
-		return atoms, n
-	end
-
 	--given a map {atom -> true} return the map {atom_name -> atom}
 	function atom_names(t)
 		local dt = {}
@@ -293,7 +285,7 @@ function M.connect(...)
 	end
 
 	local classes = {
-		copy         = C.XCB_WINDOW_CLASS_COPY_FROM_PARENT,
+		parent       = C.XCB_WINDOW_CLASS_COPY_FROM_PARENT,
 		input_output = C.XCB_WINDOW_CLASS_INPUT_OUTPUT,
 		input_only   = C.XCB_WINDOW_CLASS_INPUT_ONLY,
 	}
@@ -344,21 +336,6 @@ function M.connect(...)
 		C.xcb_copy_area(c, src, dst, gc, sx or 0, sy or 0, dx or 0, dy or 0, w, h)
 	end
 
-	function open_font(fid, name, sz)
-		C.xcb_open_font(c, fid, sz or #name, name)
-	end
-	function close_font(...)
-		C.xcb_close_font(c, ...)
-	end
-
-	function create_glyph_cursor(...)
-		C.xcb_create_glyph_cursor(c, ...)
-	end
-
-	function free_cursor(...)
-		C.xcb_free_cursor(c, ...)
-	end
-
 	--window properties -------------------------------------------------------
 
 	function list_props(win)
@@ -378,11 +355,8 @@ function M.connect(...)
 		C.xcb_delete_property(c, win, atom(prop))
 	end
 
-	local prop_formats = {
-		[C.XCB_ATOM_STRING] = 8,
-	}
-	function set_prop(win, prop, type, val, sz)
-		local format = prop_formats[type] or 32
+	function set_prop(win, prop, type, val, sz, format)
+		local format = format or 32
 		C.xcb_change_property(c, C.XCB_PROP_MODE_REPLACE, win,
 			atom(prop), atom(type), format, sz, val)
 	end
@@ -440,11 +414,22 @@ function M.connect(...)
 	end
 
 	function set_string_prop(win, prop, val, sz)
-		set_prop(win, prop, C.XCB_ATOM_STRING, val, sz or #val)
+		set_prop(win, prop, C.XCB_ATOM_STRING, val, sz or #val, 8)
 	end
 
 	function get_string_prop(win, prop)
 		return get_prop(win, prop, C.XCB_ATOM_STRING, ffi.string)
+	end
+
+	--make an atom list to be used as set_prop() value.
+	function atom_list(...)
+		local n = select('#', ...)
+		local atoms = ffi.new('xcb_atom_t[?]', n)
+		for i = 1,n do
+			local v = select(i,...)
+			atoms[i-1] = atom(v)
+		end
+		return atoms, n
 	end
 
 	function set_atom_prop(win, prop, val)

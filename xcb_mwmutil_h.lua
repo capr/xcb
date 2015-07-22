@@ -12,13 +12,10 @@ typedef struct {
 	unsigned int decorations;
 	int input_mode;
 	unsigned int status;
-} xcb_motif_wm_hints_t;
+} MotifWmHints;
 
 enum {
 	MOTIF_WM_HINTS_ELEMENTS = 5,
-};
-
-enum {
 	MWM_HINTS_FUNCTIONS     = (1 << 0),
 	MWM_HINTS_DECORATIONS   = (1 << 1),
 	MWM_HINTS_INPUT_MODE    = (1 << 2),
